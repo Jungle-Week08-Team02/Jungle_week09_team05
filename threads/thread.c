@@ -235,7 +235,7 @@ mlfqs_incr_recent_cpu ()
 		thread_current()->recent_cpu = add_mixed (thread_current()->recent_cpu, 1);
 }
 
-// 1초마다 모든 스레드의 recent_cpu 값 재계산
+// 4 tick 마다 모든 스레드의 recent_cpu 값 재계산
 void 
 mlfqs_recalc_recent_cpu()
 {
@@ -247,7 +247,7 @@ mlfqs_recalc_recent_cpu()
 	}
 }
 
-// 1초마다 모든 스레드의 load_avg 값 재계산
+// 4 tick 마다 모든 스레드의 load_avg 값 재계산
 void 
 mlfqs_recalc_priority ()
 {
@@ -378,6 +378,7 @@ tid_t
 thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
 	struct thread *t;
+
 	tid_t tid;
 
 	ASSERT (function != NULL);
