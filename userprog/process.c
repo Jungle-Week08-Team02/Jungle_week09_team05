@@ -30,18 +30,17 @@ static void __do_fork(void *);
 /* General process initializer for initd and other process. */
 static void process_init(void) { struct thread *current = thread_current(); }
 
-/* FILE_NAME으로부터 로드된 "initd"라고 불리는 첫 번째 사용자 프로그램을 시작합니다.
- * 새로 생성된 스레드는 process_create_initd()가 반환되기 전에
- * 스케줄링되거나 종료될 수 있습니다. initd의 스레드 ID를 반환하며,
- * 스레드를 생성할 수 없는 경우 TID_ERROR를 반환합니다.
- * 이 함수는 반드시 한 번만 호출되어야 합니다. */
+/* 초기 사용자 프로그램을 생성하고 실행하는 함수입니다.
+ * 이 함수는 커맨드 라인에서 입력받은 명령어를 파싱하여 프로그램을 실행합니다.
+ * 프로그램 실행을 위해 새로운 스레드를 생성하고, 프로그램의 이름과 인자를 전달합니다.
+ * 성공 시 생성된 스레드의 TID를 반환하고, 실패 시 TID_ERROR를 반환합니다.
+ * 이 함수는 Pintos의 첫 번째 사용자 프로세스를 시작하는 데 사용됩니다. */
 tid_t process_create_initd(const char *file_name) {
     char *fn_copy; // 파일 이름 복사본
     tid_t tid;     // 스레드 ID
 
     /* FILE_NAME의 복사본을 만듭니다.
      * 그렇지 않으면 호출자와 load() 사이에 경쟁 상태가 발생할 수 있습니다. */
-
     fn_copy = palloc_get_page(0); // 페이지 할당
 
     if (fn_copy == NULL) // 할당 실패
@@ -49,11 +48,33 @@ tid_t process_create_initd(const char *file_name) {
 
     strlcpy(fn_copy, file_name, PGSIZE); // 파일 이름 복사
 
-    /* FILE_NAME을 실행할 새로운 스레드를 생성합니다. */
-    tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy); // 스레드 생성
+    /* fn_copy를 이용해 실행 파일명만 추출 */
+    char *save_ptr; // 토크나이저의 위치를 추적하는 데 사용되는 변수
+    char *prog_name = strtok_r(
+        fn_copy, " ", // 공백을 기준으로 입력한 문자열을 분리하여 토크나이징을 진행
+        &save_ptr);   // 토크나이저의 위치를 추적하는 데 사용되는 변수
 
-    if (tid == TID_ERROR)          // 스레드 생성 실패
+    if (prog_name == NULL) {       // 토크나이징 실패
         palloc_free_page(fn_copy); // 할당 해제
+        return TID_ERROR;          // 스레드 ID 반환
+    }
+
+    /* 두 번째 fn_copy는 전체 커맨드라인을 보존하기 위한 것 */
+    char *fn_copy2 = palloc_get_page(0); // 페이지 할당
+    if (fn_copy2 == NULL) {              // 할당 실패
+        palloc_free_page(fn_copy);       // 할당 해제
+        return TID_ERROR;                // 스레드 ID 반환
+    }
+    strlcpy(fn_copy2, fn_copy, PGSIZE); // 파일 이름 복사
+
+    /* prog_name으로 스레드를 생성하고 fn_copy2를 인자로 전달 */
+    tid = thread_create(prog_name, PRI_DEFAULT, initd, fn_copy2); // 스레드 생성
+
+    /* 첫 번째 복사본은 이제 필요 없음 */
+    palloc_free_page(fn_copy); // 할당 해제
+
+    if (tid == TID_ERROR)           // 스레드 생성 실패
+        palloc_free_page(fn_copy2); // 할당 해제
 
     return tid; // 스레드 ID 반환
 }
