@@ -52,7 +52,7 @@ tid_t process_create_initd(const char *file_name) {
     char *save_ptr; // 토크나이저의 위치를 추적하는 데 사용되는 변수
     char *prog_name = strtok_r(
         fn_copy, " ", // 공백을 기준으로 입력한 문자열을 분리하여 토크나이징을 진행
-        &save_ptr);   // 토크나이저의 위치를 추적하는 데 사용되는 변수
+        &save_ptr); // 토크나이저의 위치를 추적하는 데 사용되는 변수
 
     if (prog_name == NULL) {       // 토크나이징 실패
         palloc_free_page(fn_copy); // 할당 해제
@@ -191,13 +191,31 @@ int process_exec(void *f_name) {
     /* 현재 컨텍스트를 종료합니다. */
     process_cleanup(); // 프로세스 정리
 
-    /* 이진 파일을 로드합니다. */
-    success = load(file_name, &_if); // 로드
+    /* 명령행 인자 파싱을 위한 변수들 */
+    char *ptr;
+    char *argv[64]; // 포인터 배열로 수정
+    int argc = 0;
 
-    /* 로드 실패 시 종료합니다. */
-    palloc_free_page(file_name); // 페이지 해제
-    if (!success)                // 로드 실패
+    /* 토큰화 */
+    char *token = strtok_r(file_name, " ", &ptr);
+
+    while (token != NULL && argc < 64) { // 토큰이 유효하고 인자 수가 64 미만인 경우
+        argv[argc++] = token;            // 인자 배열에 토큰 추가
+        token = strtok_r(NULL, " ", &ptr); // 다음 토큰 파싱
+    }
+
+    /* 실행 파일 로드 */
+    success = load(argv[0], &_if); // 첫 번째 인자를 실행 파일 이름으로 사용
+
+    /* 로드 실패 시 종료 */
+    if (!success) {
+        palloc_free_page(file_name); // 페이지 해제
         return -1;
+    }
+
+    /* 인자 스택 설정 */
+    argument_stack(argv, argc, &_if.rsp); // rsp만 전달
+    palloc_free_page(file_name);
 
     /* 전환된 프로세스를 시작합니다. */
     do_iret(&_if); // 인트러프 프레임 전환
@@ -632,3 +650,46 @@ static bool setup_stack(struct intr_frame *if_) {
     return success;
 }
 #endif /* VM */
+
+/* #Command Line Parsing - 유저 스택에 파싱된 토큰을 저장하는 함수
+ *
+ * 프로그램 실행 시 전달된 명령행 인자들을 유저 스택에 저장하는 함수입니다.
+ * argv: 파싱된 인자들의 배열
+ * argc: 인자의 개수
+ * rsp: 스택 포인터
+ *
+ * 이 함수는 다음과 같은 순서로 동작합니다:
+ * 1. 각 인자 문자열을 스택에 복사
+ * 2. 워드 정렬을 위해 스택 포인터를 8의 배수로 조정
+ * 3. 각 인자의 주소를 스택에 저장
+ * 4. argv[argc]에 NULL 포인터 저장
+ * 5. main() 함수의 인자로 전달될 argc와 argv 설정
+ */
+void argument_stack(char **argv, int argc, void **rsp) {
+    struct intr_frame _if = *(struct intr_frame *)rsp; // 인트러프 프레임 초기화
+    char *arg_addr[100];                               // 인자 주소 배열
+
+    for (int i = argc - 1; i >= 0; i--) {    // 인자 문자열을 스택에 복사
+        _if.rsp = _if.rsp - strlen(argv[i]); // 스택 포인터 조정
+        strcpy(_if.rsp, argv[i]);            // 인자 문자열 복사
+        arg_addr[i] = _if.rsp;               // 인자 주소 저장
+    }
+
+    while (!(_if.rsp % 8)) // 워드 정렬을 위해 스택 포인터를 8의 배수로 조정
+        *(uint8_t *)(--_if.rsp) = 0; // 스택 포인터 조정
+
+    for (int i = argc; i >= 0; i--) { // 인자 주소를 스택에 저장
+        _if.rsp = _if.rsp - 8;        // 스택 포인터 조정
+
+        if (i == argc)                           // 마지막 인자인 경우
+            memset(_if.rsp, 0, sizeof(char **)); // 스택 포인터 초기화
+
+        else                                                // 그 외의 경우
+            memcpy(_if.rsp, &arg_addr[i], sizeof(char **)); // 인자 주소 복사
+    }
+
+    _if.rsp = _if.rsp - 8;              // 스택 포인터 조정
+    memset(_if.rsp, 0, sizeof(void *)); // 스택 포인터 초기화
+    _if.R.rdi = argc;                   // 인자 개수 설정
+    _if.R.rsi = _if.rsp + 8;            // 인자 시작 주소 설정
+}
