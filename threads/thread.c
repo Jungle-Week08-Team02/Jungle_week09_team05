@@ -130,7 +130,14 @@ schedule_by_priority () {
 	if (!list_empty(&ready_list)){
 		struct thread *highest_priority_thread = list_entry(list_front(&ready_list), struct thread, elem);
 		if (curr->priority < highest_priority_thread->priority)
-			thread_yield();
+			// 인터럽트 상황이 아닐 때에만 thread_yield() 호출
+			if (!intr_context()){
+				thread_yield();
+			}
+			// 인터럽트 상황일 떄는 intr_yield_on_return() 호출
+			else{
+				intr_yield_on_return();
+			}
 	}
 }
 
@@ -391,6 +398,14 @@ thread_create (const char *name, int priority,
 	/* Initialize thread. */
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
+
+/* Project 2 : System Call 구현 */
+#ifdef USERPROG
+	t->exit_status = 0;
+
+	/* 현재 실행 중인 스레드의 자식 스레드 리스트에 현재 스레드를 추가 */
+	list_push_back(&thread_current()->child_list, &t->child_elem);
+#endif
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
@@ -668,6 +683,13 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->magic = THREAD_MAGIC;
 	
 	list_push_back(&all_list, &t->allelem);
+
+	/* Project 2 : System call 구현 */
+	#ifdef USERPROG
+	sema_init(&t->fork_sema, 0);
+	sema_init(&t->exit_sema, 0);
+	sema_init(&t->wait_sema, 0);
+	#endif
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

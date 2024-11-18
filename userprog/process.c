@@ -79,9 +79,25 @@ initd (void *f_name) {
  * TID_ERROR if the thread cannot be created. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
-	/* Clone current thread to new thread.*/
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
+	struct thread *curr = thread_current();
+	struct intr_frame *f = (pg_round_up(rrsp()) - sizeof(struct intr_frame));
+	// 여기서 부모 interrupt frame을 초기화.
+	memcpy(&curr->parent_if, f, sizeof(struct intr_frame));
+
+	// 현재 스레드 (curr)과 똑같은 스레드 새로 생성
+	tid_t tid = thread_create(name,PRI_DEFAULT,__do_fork, curr);
+	// 스레드 생성이 불가능한 경우 -1값(상수 TID_ERROR) 리턴
+	if (tid == TID_ERROR)
+		return TID_ERROR;
+	
+	struct thread *child = get_child_process(tid);
+
+	sema_down(&child->fork_sema);
+
+	if (child->exit_status == TID_ERROR)
+		return TID_ERROR;
+
+	return tid; // 자식 프로세스의 tid 리턴
 }
 
 #ifndef VM
@@ -126,7 +142,7 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &parent->parent_if;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
@@ -160,14 +176,6 @@ __do_fork (void *aux) {
 		do_iret (&if_);
 error:
 	thread_exit ();
-}
-
-void parsing_file_name (char*file_name, int *argc, char * argv[]){
-	char *token, *save_ptr;
-
-	for (token = strtok_r (file_name," ", &save_ptr); token != NULL; token=strtok_r(NULL," ",save_ptr)){
-		argv[(*argc)++] = token;
-	}
 }
 
 /* Switch the current execution context to the f_name.
@@ -215,6 +223,7 @@ process_exec (void *f_name) { // 커맨드 라인을 f_name으로 전달
 	NOT_REACHED ();
 }
 
+/* Project 2: Command Line Parsing - 유저 스택에 인자 토큰 저장 */
 void
 argument_stack(char **parse, int count, void **rsp){
 	for (int i = count - 1; i > -1; i--)
@@ -261,6 +270,8 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+
+	thread_sleep(100);
 
 	return -1;
 }

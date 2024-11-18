@@ -103,6 +103,7 @@ struct thread {
 	struct list donations;							/* 해당 스레드가 가지고 있는 lock을 필요로 하는 스레드들 */
 	struct list_elem d_elem;						/* donations 리스트를 쓰기 위한 리스트 요소 */
 	struct lock * wait_on_lock;					/* 해당 스레드가 기다리고 있는 lock을 가리키는 포인터 */ 
+	int64_t wake_tick; /* 스레드가 깨어날 시각*/
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
@@ -112,6 +113,21 @@ struct thread {
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+
+	/* Project 2: System Call 구현 */
+	int exit_status; // exit 상태를 나타내는 정수형 변수
+
+	int fd_idx;										// fd 인덱스
+	struct file **fdt;						// fd 테이블
+	struct file *runn_file;				// 실행중인 file
+
+	struct intr_frame this_if; 	// 해당 스레드의 interrupt frame
+	struct list child_list; 			// 자식 프로세스 리스트
+	struct list_elem child_elem; 	// 자식 프로세스 리스트 요소
+
+	struct semaphore fork_sema; 	// fork가 완료될 때 sgnal
+	struct semaphore exit_sema; 	// 자식 프로세스 종료 signal
+	struct semaphore wait_sema; 	//exit_sema를 기다릴 때 사용
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
@@ -122,7 +138,6 @@ struct thread {
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
 	
-	int64_t wake_tick; /* 스레드가 깨어날 시각*/
 };
 
 /* If false (default), use round-robin scheduler.

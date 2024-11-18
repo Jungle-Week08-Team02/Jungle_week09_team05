@@ -8,6 +8,14 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 
+/* Project 2 : System Call 구현 */
+#include <string.h>
+#include "filesys/file.h"
+#include "threads/mmu.h"
+#include "threads/palloc.h"
+#include "userprog/process.h"
+/*******************************/
+
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
@@ -40,7 +48,87 @@ syscall_init (void) {
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
-	// TODO: Your implementation goes here.
+
+	int syscall_num = f->R.rax;
+
+	switch (syscall_num)
+	{
+		case SYS_HALT:
+			halt();
+			break;
+		
+		case SYS_EXIT:
+			exit(-1);
+			break;
+		
+		case SYS_FORK:
+			/* code */
+			break;
+		
+		case SYS_EXEC:
+			/* code */
+			break;
+		
+		case SYS_WAIT:
+			/* code */
+			break;
+		
+		case SYS_CREATE:
+			/* code */
+			break;
+		
+		case SYS_REMOVE:
+			/* code */
+			break;
+		
+		case SYS_OPEN:
+			/* code */
+			break;
+		
+		default:
+			exit(-1);
+	}
+
 	printf ("system call!\n");
 	thread_exit ();
+}
+
+#ifndef VM
+/* Project 2 : System Call 구현 */
+void check_address(void *addr){
+	struct thread *curr = thread_current();
+
+	if (is_kernel_vaddr(addr) || addr == NULL || pml4_get_page(curr->pml4, addr) == NULL)
+		exit(-1);
+}
+#else
+/* Project 3: Anonymous Page */
+#endif
+
+/* Project 2 : System Call 구현 */
+void halt(void) {
+	power_off();
+}
+
+void exit (int status) {
+	struct thread *curr = thread_current();
+	curr->exit_status = status;
+
+	printf("%s: exit(%d).\n", curr->name, curr->exit_status);
+
+	thread_exit();
+}
+
+pid_t fork(const char * thread_name) {
+	check_address(thread_name);
+
+	return process_fork(thread_name, NULL);
+}
+
+int exec (const char *cmd_line){
+	/* code */
+}
+
+int wait (pid_t pid){
+	/* code */
 }
