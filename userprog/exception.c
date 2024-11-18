@@ -148,8 +148,9 @@ page_fault (struct intr_frame *f) {
 
 	/* Count page faults. */
 	page_fault_cnt++;
-
-  exit(-1); /* Test Case 가 Hardware 수준에서 페이지 폴트를 호출하기 때문에 Test Case 통과를 위해서 exception을 수정 */
+	/* 몇몇 TestCase에서 kernel이 잘못된 프로세스를 제대로 핸들링하는지 체크함. */
+	/* 이 때, PintOS는 process를 kill하고 스레드 이름과 exit status -1을 print해야하기 때문에 아래 코드 추가 */
+  exit(-1); 
 
 	/* If the fault is true fault, show info and exit. */
 	printf ("Page fault at %p: %s error %s page in %s context.\n",

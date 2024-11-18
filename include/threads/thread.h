@@ -5,6 +5,10 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
+
+#define USERPROG
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -29,9 +33,14 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 
 // *************************************************************************************//
+/* Project 1. Advanced Scheduler */
 #define NICE_DEFAULT 0
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
+
+/* Project 2. System Call */
+#define FDT_PAGES 3												//test 'multi-oom' 테스트용
+#define FDCOUNT_LIMIT FDT_PAGES * (1<<9)	//엔트리가 512개인 이유: 페이지 크기
 // *************************************************************************************//
 
 /* A kernel thread or user process.
@@ -117,11 +126,11 @@ struct thread {
 	/* Project 2: System Call 구현 */
 	int exit_status; // exit 상태를 나타내는 정수형 변수
 
-	int fd_idx;										// fd 인덱스
 	struct file **fdt;						// fd 테이블
+	int fd_idx;										// fd 인덱스
 	struct file *runn_file;				// 실행중인 file
 
-	struct intr_frame this_if; 	// 해당 스레드의 interrupt frame
+	struct intr_frame parent_if; 	// 해당 스레드의 interrupt frame
 	struct list child_list; 			// 자식 프로세스 리스트
 	struct list_elem child_elem; 	// 자식 프로세스 리스트 요소
 

@@ -12,6 +12,8 @@
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 #include "threads/fixed_point.h"
+#define USERPROG
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -402,6 +404,15 @@ thread_create (const char *name, int priority,
 /* Project 2 : System Call 구현 */
 #ifdef USERPROG
 	t->exit_status = 0;
+
+	/* file descriptor table 초기화 */
+	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	if (t->fdt == NULL)
+		return TID_ERROR;
+	t->fdt[0] = STDIN;
+	t->fdt[1] = STDOUT;
+	t->fdt[2] = STDERR;
+	t->fd_idx = 3;
 
 	/* 현재 실행 중인 스레드의 자식 스레드 리스트에 현재 스레드를 추가 */
 	list_push_back(&thread_current()->child_list, &t->child_elem);

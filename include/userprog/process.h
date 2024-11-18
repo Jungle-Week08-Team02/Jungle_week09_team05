@@ -1,6 +1,11 @@
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
 
+/* Project 2. System Call fdt에 사용할 기본 입출력 상수 */
+#define STDIN 0x1
+#define STDOUT 0x2
+#define STDERR 0x3
+
 #include "threads/thread.h"
 
 tid_t process_create_initd (const char *file_name);

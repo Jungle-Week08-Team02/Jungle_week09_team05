@@ -169,13 +169,32 @@ __do_fork (void *aux) {
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
-	process_init ();
+	/* Project 2. fdt와 그 fd_idx 복제 */
+	if (parent->fd_idx >= FDCOUNT_LIMIT)
+		goto error;
+	
+	current->fd_idx = parent->fd_idx;
+	/* 적재된 file이 있다면 file 복제*/
+	struct file *file;
+	for (int fd = 0; fd < FDCOUNT_LIMIT; fd++) {
+		file = parent->fdt[fd];
+		if (file == NULL)
+			continue;
+		
+		if (file > STDERR)
+			current->fdt[fd] = file_duplicate(file);
+		else
+			current->fdt[fd] = file;
+	}
+
+	process_init();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret (&if_);
 error:
-	thread_exit ();
+	sema_up(&current->fork_sema); //복제에 실패 했으므로 fork용 sema unblock
+	exit(TID_ERROR);
 }
 
 /* Switch the current execution context to the f_name.
@@ -196,7 +215,7 @@ process_exec (void *f_name) { // 커맨드 라인을 f_name으로 전달
 	/* We first kill the current context */
 	process_cleanup ();
 
-	/* 인자 parsing */
+	/* Command Line 인자 parsing */
 	char *parse[64];
 	char *token, *save_ptr;
 	int count = 0;
