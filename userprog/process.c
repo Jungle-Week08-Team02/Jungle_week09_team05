@@ -366,15 +366,17 @@ static bool load(const char *file_name, struct intr_frame *if_) {
         goto done;
     }
 
-    /* Read and verify executable header. */
-    if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
-        memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 ||
-        ehdr.e_machine != 0x3E // amd64
-        || ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) ||
-        ehdr.e_phnum > 1024) {
-        printf("load: %s: error loading executable\n", file_name);
-        goto done;
-    }
+	/* Read and verify executable header. */
+	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
+			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
+			|| ehdr.e_type != 2
+			|| ehdr.e_machine != 0x3E // amd64
+			|| ehdr.e_version != 1
+			|| ehdr.e_phentsize != sizeof (struct Phdr)
+			|| ehdr.e_phnum > 1024) {
+		printf ("load: %s: error loading executable\n", file_name);
+		goto done;
+	}
 
     /* Read program headers. */
     file_ofs = ehdr.e_phoff;
@@ -671,8 +673,8 @@ void argument_stack(char **argv, int argc, void **rsp) {
 
     for (int i = argc - 1; i >= 0; i--) {    // 인자 문자열을 스택에 복사
         _if.rsp = _if.rsp - strlen(argv[i]); // 스택 포인터 조정
-        strcpy(_if.rsp, argv[i]);            // 인자 문자열 복사
-        arg_addr[i] = _if.rsp;               // 인자 주소 저장
+        strlcpy(_if.rsp, argv[i], strlen(argv[i]) + 1); // 인자 문자열 복사
+        arg_addr[i] = _if.rsp;                          // 인자 주소 저장
     }
 
     while (!(_if.rsp % 8)) // 워드 정렬을 위해 스택 포인터를 8의 배수로 조정
