@@ -127,10 +127,14 @@ void schedule_by_priority() {
     if (!list_empty(&ready_list)) {
         struct thread *highest_priority_thread =
             list_entry(list_front(&ready_list), struct thread, elem);
-        if (curr->priority < highest_priority_thread->priority)
-            thread_yield();
-    } else {
-        intr_yield_on_return();
+        if (curr->priority < highest_priority_thread->priority) {
+            // 인터럽트 컨텍스트인 경우
+            if (intr_context())
+                intr_yield_on_return();
+            // 인터럽트 컨텍스트가 아닌 경우
+            else
+                thread_yield();
+        }
     }
 }
 

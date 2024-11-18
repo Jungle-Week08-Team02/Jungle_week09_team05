@@ -215,7 +215,10 @@ int process_exec(void *f_name) {
 
     /* 인자 스택 설정 */
     argument_stack(argv, argc, &_if.rsp); // rsp만 전달
+    printf("rsp: %lx\n", _if.rsp);
     palloc_free_page(file_name);
+
+    hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
     /* 전환된 프로세스를 시작합니다. */
     do_iret(&_if); // 인트러프 프레임 전환
@@ -229,11 +232,9 @@ int process_exec(void *f_name) {
  * 기다리지 않고 즉시 -1을 반환합니다.
  *
  * 이 함수는 문제 2-2에서 구현될 예정입니다. 현재는 아무 동작도 하지 않습니다. */
-int process_wait(tid_t child_tid UNUSED) {
-    /* XXX: 힌트) process_wait(initd)에서 pintos가 종료되므로,
-     * XXX:       process_wait를 구현하기 전에 여기에 무한 루프를
-     * XXX:       추가하는 것을 권장합니다. */
-    return -1;
+int process_wait (tid_t child_tid UNUSED) {
+	thread_sleep(200);
+	return -1;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -366,7 +367,7 @@ static bool load(const char *file_name, struct intr_frame *if_) {
         goto done;
     }
 
-	/* Read and verify executable header. */
+    /* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
 			|| ehdr.e_type != 2
@@ -375,8 +376,8 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 			|| ehdr.e_phentsize != sizeof (struct Phdr)
 			|| ehdr.e_phnum > 1024) {
 		printf ("load: %s: error loading executable\n", file_name);
-		goto done;
-	}
+        goto done;
+    }
 
     /* Read program headers. */
     file_ofs = ehdr.e_phoff;
@@ -653,45 +654,48 @@ static bool setup_stack(struct intr_frame *if_) {
 }
 #endif /* VM */
 
-/* #Command Line Parsing - 유저 스택에 파싱된 토큰을 저장하는 함수
+/* 사용자 프로그램의 명령행 인자를 스택에 설정하는 함수입니다.
+ * 
+ * 이 함수는 다음과 같은 순서로 스택을 구성합니다:
+ * 1. 인자 문자열들을 스택의 맨 위에서부터 역순으로 저장합니다.
+ * 2. 8바이트 정렬을 위해 필요한 패딩을 추가합니다.
+ * 3. argv[argc]에 해당하는 NULL 포인터를 추가합니다.
+ * 4. argv 배열의 각 인자에 대한 포인터를 역순으로 저장합니다.
+ * 5. 가짜 리턴 주소를 추가하여 스택 프레임을 완성합니다.
  *
- * 프로그램 실행 시 전달된 명령행 인자들을 유저 스택에 저장하는 함수입니다.
- * argv: 파싱된 인자들의 배열
- * argc: 인자의 개수
- * rsp: 스택 포인터
- *
- * 이 함수는 다음과 같은 순서로 동작합니다:
- * 1. 각 인자 문자열을 스택에 복사
- * 2. 워드 정렬을 위해 스택 포인터를 8의 배수로 조정
- * 3. 각 인자의 주소를 스택에 저장
- * 4. argv[argc]에 NULL 포인터 저장
- * 5. main() 함수의 인자로 전달될 argc와 argv 설정
+ * @param argv 명령행 인자 문자열 배열
+ * @param argc 명령행 인자의 개수
+ * @param rsp 스택 포인터의 주소
  */
 void argument_stack(char **argv, int argc, void **rsp) {
-    struct intr_frame _if = *(struct intr_frame *)rsp; // 인트러프 프레임 초기화
-    char *arg_addr[100];                               // 인자 주소 배열
-
-    for (int i = argc - 1; i >= 0; i--) {    // 인자 문자열을 스택에 복사
-        _if.rsp = _if.rsp - strlen(argv[i]); // 스택 포인터 조정
-        strlcpy(_if.rsp, argv[i], strlen(argv[i]) + 1); // 인자 문자열 복사
-        arg_addr[i] = _if.rsp;                          // 인자 주소 저장
+    // Save argument strings (character by character)
+    for (int i = argc - 1; i >= 0; i--) {
+        int argv_len = strlen(argv[i]);
+        for (int j = argv_len; j >= 0; j--) {
+            char argv_char = argv[i][j];
+            (*rsp)--;
+            **(char **)rsp = argv_char; // 1 byte
+        }
+        argv[i] = *(char **)rsp; // 리스트에 rsp 주소 넣기
     }
 
-    while (!(_if.rsp % 8)) // 워드 정렬을 위해 스택 포인터를 8의 배수로 조정
-        *(uint8_t *)(--_if.rsp) = 0; // 스택 포인터 조정
-
-    for (int i = argc; i >= 0; i--) { // 인자 주소를 스택에 저장
-        _if.rsp = _if.rsp - 8;        // 스택 포인터 조정
-
-        if (i == argc)                           // 마지막 인자인 경우
-            memset(_if.rsp, 0, sizeof(char **)); // 스택 포인터 초기화
-
-        else                                                // 그 외의 경우
-            memcpy(_if.rsp, &arg_addr[i], sizeof(char **)); // 인자 주소 복사
+    // Word-align padding
+    int pad = (int)*rsp % 8;
+    for (int k = 0; k < pad; k++) {
+        (*rsp)--;
+        **(uint8_t **)rsp = 0;
     }
 
-    _if.rsp = _if.rsp - 8;              // 스택 포인터 조정
-    memset(_if.rsp, 0, sizeof(void *)); // 스택 포인터 초기화
-    _if.R.rdi = argc;                   // 인자 개수 설정
-    _if.R.rsi = _if.rsp + 8;            // 인자 시작 주소 설정
+    // Pointers to the argument strings
+    (*rsp) -= 8;
+    **(char ***)rsp = 0;
+
+    for (int i = argc - 1; i >= 0; i--) {
+        (*rsp) -= 8;
+        **(char ***)rsp = argv[i];
+    }
+
+    // Return address
+    (*rsp) -= 8;
+    **(void ***)rsp = 0;
 }
