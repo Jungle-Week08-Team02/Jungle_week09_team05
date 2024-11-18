@@ -275,6 +275,21 @@ argument_stack(char **parse, int count, void **rsp){
 	**(void ***)rsp = 0;
 }
 
+/* Project 2. 자식 process를 가져오는 함수 */
+struct thread *get_child_process(int pid) {
+	struct thread *curr = thread_current();
+	struct thread *t;
+
+	for (struct list_elem *e = list_begin(&curr->child_list); e != list_end(&curr->child_list); e = list_next(e)) {
+			t = list_entry(e, struct thread, child_elem);
+
+			if (pid == t->tid)
+					return t;
+	}
+
+	return NULL;
+}
+
 /* Waits for thread TID to die and returns its exit status.  If
  * it was terminated by the kernel (i.e. killed due to an
  * exception), returns -1.  If TID is invalid or if it was not a
@@ -290,9 +305,15 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 
-	thread_sleep(100);
+	struct thread *child = get_child_process(child_tid);
+	if (child == NULL)
+		return -1;
+	
+	sema_down(&child->wait_sema); // 자식 프로세스가 종료될 때 까지 대기.
+	list_remove(&child->child_elem);
+	sema_up(&child->exit_sema); //자식 프로세스가 죽을 수 있도록 signal
 
-	return -1;
+	return child->exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -304,7 +325,15 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
-	process_cleanup ();
+	/* fdt 비우기 */
+	for (int fd = 0; fd < curr->fd_idx; fd++)
+		close(fd);
+	palloc_free_multiple(curr->fdt, FDT_PAGES);
+
+	file_close(curr->runn_file);
+	process_cleanup();
+	sema_up(&curr->wait_sema);
+	sema_down(&curr->exit_sema);
 }
 
 /* Free the current process's resources. */

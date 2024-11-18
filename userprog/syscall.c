@@ -62,15 +62,15 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		
 		case SYS_FORK:
-			/* code */
+			f->R.rax = fork(f->R.rdi);
 			break;
 		
 		case SYS_EXEC:
-			/* code */
+			f->R.rax = exec(f->R.rdi);
 			break;
 		
 		case SYS_WAIT:
-			/* code */
+			f->R.rax = process_wait(f->R.rdi);
 			break;
 		
 		case SYS_CREATE:
@@ -119,16 +119,25 @@ void exit (int status) {
 	thread_exit();
 }
 
-pid_t fork(const char * thread_name) {
+tid_t fork(const char * thread_name) {
 	check_address(thread_name);
 
 	return process_fork(thread_name, NULL);
 }
 
 int exec (const char *cmd_line){
-	/* code */
+	check_address(cmd_line);
+	off_t size = strlen(cmd_line) + 1;
+	char *cmd_copy = palloc_get_page(PAL_ZERO);
+
+	if (cmd_copy == NULL)
+		return -1;
+
+	memcpy(cmd_copy, cmd_line, size);
+
+	return process_exec(cmd_copy); 
 }
 
-int wait (pid_t pid){
-	/* code */
+int wait (tid_t tid){
+	return process_wait(tid);
 }
