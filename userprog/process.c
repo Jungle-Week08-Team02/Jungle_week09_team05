@@ -289,6 +289,7 @@ void process_exit(void) {
      * TODO: project2/process_termination.html).
      * TODO: We recommend you to implement process resource cleanup here. */
 
+    file_close(curr->running_file);
     process_cleanup();
 }
 
@@ -472,6 +473,9 @@ static bool load(const char *file_name, struct intr_frame *if_) {
             break;
         }
     }
+
+    t->running_file = file;
+    file_deny_write(file);
 
     /* Set up stack. */
     if (!setup_stack(if_))

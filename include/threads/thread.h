@@ -121,6 +121,8 @@ struct thread {
     struct semaphore load_sema; /* 해당 스레드의 자식 스레드들이 모두 종료될 때까지
                                    기다리는 세마포어 */
 
+    struct file *running_file; /* 해당 스레드가 현재 실행 중인 파일 */
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint64_t *pml4; /* Page map level 4 */
