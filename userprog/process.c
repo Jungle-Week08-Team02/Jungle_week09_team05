@@ -263,7 +263,7 @@ int process_exec(void *f_name) {
     printf("rsp: %lx\n", _if.rsp);
     palloc_free_page(file_name);
 
-    hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+    // hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
     /* 전환된 프로세스를 시작합니다. */
     do_iret(&_if); // 인트러프 프레임 전환

@@ -282,30 +282,27 @@ int read(int fd, void *buffer, unsigned size) {
 
     else {
         if (fd < 2) {
-
             lock_release(&filesys_lock);
             return -1;
         }
 
         struct file *file = process_get_file(fd);
-
         if (file == NULL) {
-
             lock_release(&filesys_lock);
             return -1;
         }
 
-        struct page *page = spt_find_page(&thread_current()->spt, buffer);
+        // struct page *page = spt_find_page(&thread_current()->spt, buffer);
 
-        if (page && !page->writable) {
-            lock_release(&filesys_lock);
-            exit(-1);
-        }
+        // if (page && !page->writable) {
+        //     lock_release(&filesys_lock);
+        //     exit(-1);
+        // }
 
         bytes_read = file_read(file, buffer, size);
-
         lock_release(&filesys_lock);
     }
+
     return bytes_read;
 }
 
