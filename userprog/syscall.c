@@ -1,12 +1,17 @@
-#include "userprog/syscall.h"
-#include "intrinsic.h"
+#include <stdio.h>
+#include <string.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/loader.h"
 #include "threads/thread.h"
-#include "userprog/gdt.h"
-#include <stdio.h>
+#include "threads/vaddr.h"
 #include <syscall-nr.h>
+#include "userprog/gdt.h"
+#include "userprog/process.h"
+#include "userprog/syscall.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
+#include "intrinsic.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);

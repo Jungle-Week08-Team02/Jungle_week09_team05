@@ -118,8 +118,9 @@ struct thread {
     struct list child_list; /* 해당 스레드의 자식 스레드들을 가리키는 리스트 */
     struct list_elem child_elem; /* child_list를 쓰기 위한 리스트 요소 */
 
-    struct semaphore load_sema; /* 해당 스레드의 자식 스레드들이 모두 종료될 때까지
-                                   기다리는 세마포어 */
+    struct semaphore load_sema; /* 해당 스레드의 자식 스레드들이 모두 종료될 때까지 기다리는 세마포어 */
+    struct semaphore wait_sema; /* 해당 스레드가 기다리고 있는 lock을 가리키는 세마포어 */
+    struct semaphore exit_sema; /* 해당 스레드가 종료될 때까지 기다리는 세마포어 */
 
     struct file *running_file; /* 해당 스레드가 현재 실행 중인 파일 */
 

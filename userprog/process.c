@@ -277,8 +277,16 @@ int process_exec(void *f_name) {
  *
  * 이 함수는 문제 2-2에서 구현될 예정입니다. 현재는 아무 동작도 하지 않습니다. */
 int process_wait(tid_t child_tid UNUSED) {
-    thread_sleep(200);
-    return -1;
+    struct thread *child = get_child_process(child_tid);
+
+    if (child == NULL)
+        return -1;
+
+    sema_down(&child->wait_sema);
+    list_remove(&child->elem);
+    sema_up(&child->exit_sema);
+
+    return child->exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
