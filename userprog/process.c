@@ -787,3 +787,14 @@ int process_add_file(struct file *f) {
     fdt[t->next_fd] = f;
     return t->next_fd++;
 }
+
+/* 파일 디스크립터를 통해 파일을 반환하는 함수입니다. */
+struct file *process_get_file(int fd) {
+    struct thread *t = thread_current();
+    struct file **fdt = t->fdt;
+
+    if (fd < 0 || fd >= t->next_fd)
+        return NULL;
+
+    return fdt[fd];
+}

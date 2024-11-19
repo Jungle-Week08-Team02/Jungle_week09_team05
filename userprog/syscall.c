@@ -170,14 +170,25 @@ bool remove(const char *file) {
  * 성공하면 파일 디스크립터를, 실패하면 -1을 반환합니다. */
 int open(const char *file) {
     check_address(file);
+    
+    /* 파일 시스템 접근에 대한 동기화를 보장하기 위해 lock을 획득합니다.
+     * 여러 스레드가 동시에 파일을 열려고 시도할 때 발생할 수 있는 경쟁 상태를 방지합니다. */
+    lock_acquire(&filesys_lock);
+    
     struct file *f = filesys_open(file);
-    if (f == NULL)
+    if (f == NULL) {
+        lock_release(&filesys_lock);
         return -1;
+    }
 
     int fd = process_add_file(f);
-    if (fd == -1)
+    if (fd == -1) {
         file_close(f);
+        lock_release(&filesys_lock);
+        return -1;
+    }
 
+    lock_release(&filesys_lock);
     return fd;
 }
 
@@ -238,8 +249,10 @@ int wait(tid_t pid) { return process_wait(pid); }
  * 성공하면 파일 크기를, 실패하면 -1을 반환합니다. */
 int filesize(int fd) {
     struct file *f = process_get_file(fd);
+
     if (f == NULL)
         return -1;
+
     return file_length(f);
 }
 
