@@ -1,38 +1,38 @@
 #ifndef __LIB_SYSCALL_NR_H
 #define __LIB_SYSCALL_NR_H
 
-/* System call numbers. */
+/* 시스템 콜 번호 */
 enum {
-	/* Projects 2 and later. */
-	SYS_HALT,                   /* Halt the operating system. */
-	SYS_EXIT,                   /* Terminate this process. */
-	SYS_FORK,                   /* Clone current process. */
-	SYS_EXEC,                   /* Switch current process. */
-	SYS_WAIT,                   /* Wait for a child process to die. */
-	SYS_CREATE,                 /* Create a file. */
-	SYS_REMOVE,                 /* Delete a file. */
-	SYS_OPEN,                   /* Open a file. */
-	SYS_FILESIZE,               /* Obtain a file's size. */
-	SYS_READ,                   /* Read from a file. */
-	SYS_WRITE,                  /* Write to a file. */
-	SYS_SEEK,                   /* Change position in a file. */
-	SYS_TELL,                   /* Report current position in a file. */
-	SYS_CLOSE,                  /* Close a file. */
+	/* 프로젝트 2 이상 */
+	SYS_HALT,                   /* 운영체제를 중지합니다. */
+	SYS_EXIT,                   /* 현재 프로세스를 종료합니다. */
+	SYS_FORK,                   /* 현재 프로세스를 복제합니다. */
+	SYS_EXEC,                   /* 현재 프로세스를 전환합니다. */
+	SYS_WAIT,                   /* 자식 프로세스가 종료될 때까지 대기합니다. */
+	SYS_CREATE,                 /* 파일을 생성합니다. */
+	SYS_REMOVE,                 /* 파일을 삭제합니다. */
+	SYS_OPEN,                   /* 파일을 엽니다. */
+	SYS_FILESIZE,               /* 파일의 크기를 얻습니다. */
+	SYS_READ,                   /* 파일로부터 읽습니다. */
+	SYS_WRITE,                  /* 파일에 씁니다. */
+	SYS_SEEK,                   /* 파일 내 위치를 변경합니다. */
+	SYS_TELL,                   /* 파일 내 현재 위치를 보고합니다. */
+	SYS_CLOSE,                  /* 파일을 닫습니다. */
 
-	/* Project 3 and optionally project 4. */
-	SYS_MMAP,                   /* Map a file into memory. */
-	SYS_MUNMAP,                 /* Remove a memory mapping. */
+	/* 프로젝트 3과 선택적으로 프로젝트 4 */
+	SYS_MMAP,                   /* 파일을 메모리에 매핑합니다. */
+	SYS_MUNMAP,                 /* 메모리 매핑을 제거합니다. */
 
-	/* Project 4 only. */
-	SYS_CHDIR,                  /* Change the current directory. */
-	SYS_MKDIR,                  /* Create a directory. */
-	SYS_READDIR,                /* Reads a directory entry. */
-	SYS_ISDIR,                  /* Tests if a fd represents a directory. */
-	SYS_INUMBER,                /* Returns the inode number for a fd. */
-	SYS_SYMLINK,                /* Returns the inode number for a fd. */
+	/* 프로젝트 4 전용 */
+	SYS_CHDIR,                  /* 현재 디렉토리를 변경합니다. */
+	SYS_MKDIR,                  /* 디렉토리를 생성합니다. */
+	SYS_READDIR,                /* 디렉토리 항목을 읽습니다. */
+	SYS_ISDIR,                  /* fd가 디렉토리를 나타내는지 테스트합니다. */
+	SYS_INUMBER,                /* fd에 대한 inode 번호를 반환합니다. */
+	SYS_SYMLINK,                /* fd에 대한 inode 번호를 반환합니다. */
 
-	/* Extra for Project 2 */
-	SYS_DUP2,                   /* Duplicate the file descriptor */
+	/* 프로젝트 2 추가 기능 */
+	SYS_DUP2,                   /* 파일 디스크립터를 복제합니다 */
 
 	SYS_MOUNT,
 	SYS_UMOUNT,
