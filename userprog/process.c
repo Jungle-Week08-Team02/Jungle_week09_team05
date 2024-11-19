@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef VM
+#include "userprog/syscall.h"
 #include "vm/vm.h"
 #endif
 
@@ -199,7 +200,7 @@ static void __do_fork(void *aux) {
      * TODO:       the resources of parent.*/
     for (int i = 0; i < FDT_COUNT_LIMIT; i++) {
         struct file *file = parent->fdt[i];
-        
+
         if (file == NULL)
             continue;
         if (file > 2)
@@ -761,4 +762,28 @@ void argument_stack(char **argv, int argc, void **rsp) {
     // Return address
     (*rsp) -= 8;
     **(void ***)rsp = 0;
+}
+
+/* 새로운 파일을 프로세스의 파일 디스크립터 테이블에 추가하는 함수입니다.
+ * 성공 시 할당된 파일 디스크립터를 반환하고, 실패 시 -1을 반환합니다.
+ *
+ * 이 함수는 다음과 같은 작업을 수행합니다:
+ * 1. 현재 사용 가능한 가장 작은 파일 디스크립터를 찾습니다.
+ * 2. 파일을 파일 디스크립터 테이블에 추가합니다.
+ * 3. 할당된 파일 디스크립터를 반환합니다. */
+int process_add_file(struct file *f) {
+    struct thread *t = thread_current();
+    struct file **fdt = t->fdt;
+
+    // 사용 가능한 가장 작은 파일 디스크립터를 찾습니다
+    while (t->next_fd < FDT_COUNT_LIMIT && fdt[t->next_fd])
+        t->next_fd++;
+
+    // 파일 디스크립터 테이블이 가득 찼는지 확인
+    if (t->next_fd >= FDT_COUNT_LIMIT)
+        return -1;
+
+    // 파일을 테이블에 추가하고 파일 디스크립터 반환
+    fdt[t->next_fd] = f;
+    return t->next_fd++;
 }

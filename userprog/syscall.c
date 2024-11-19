@@ -52,6 +52,8 @@ void syscall_init(void) {
      * 따라서 FLAG_FL을 마스킹했습니다. */
     write_msr(MSR_SYSCALL_MASK,
               FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+
+    lock_init(&filesys_lock);
 }
 
 /* 시스템 콜 인터페이스의 메인 함수 */
@@ -135,6 +137,8 @@ void check_address(void *addr) {
     if (addr == NULL)
         exit(-1);
     if (!is_user_vaddr(addr))
+        exit(-1);
+    if (pml4_get_page(thread_current()->pml4, addr) == NULL)
         exit(-1);
 }
 

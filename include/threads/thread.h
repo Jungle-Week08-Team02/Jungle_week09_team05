@@ -29,6 +29,7 @@ typedef int tid_t;
 #define PRI_MAX 63     /* Highest priority. */
 
 /* 파일 디스크립터 테이블의 크기 */
+#define FDT_PAGES 2
 #define FDT_COUNT_LIMIT 128
 
 // *************************************************************************************//

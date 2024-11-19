@@ -391,6 +391,12 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
     t->tf.ss = SEL_KDSEG;
     t->tf.cs = SEL_KCSEG;
     t->tf.eflags = FLAG_IF;
+    t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+
+    if (t->fdt == NULL) {
+        palloc_free_page(t);
+        return TID_ERROR;
+    }
 
     /* Add to run queue. */
     thread_unblock(t);
@@ -632,6 +638,8 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->recent_cpu = RECENT_CPU_DEFAULT;
 
     t->magic = THREAD_MAGIC;
+
+    t->next_fd = 2;
 
     list_push_back(&all_list, &t->allelem);
     sema_init(&t->load_sema, 0);
