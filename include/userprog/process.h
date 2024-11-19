@@ -11,6 +11,7 @@ void process_exit(void);
 void process_activate(struct thread *next);
 int process_add_file(struct file *f);
 struct file *process_get_file(int fd);
+void process_close_file(int fd);
 
 // 인자 스택 설정
 void argument_stack(char **argv, int argc, void **rsp);

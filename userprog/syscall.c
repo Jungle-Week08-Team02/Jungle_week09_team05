@@ -1,17 +1,20 @@
-#include <stdio.h>
-#include <string.h>
-#include "threads/flags.h"
-#include "threads/interrupt.h"
-#include "threads/loader.h"
-#include "threads/thread.h"
-#include "threads/vaddr.h"
-#include <syscall-nr.h>
-#include "userprog/gdt.h"
-#include "userprog/process.h"
 #include "userprog/syscall.h"
+#include "devices/input.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "intrinsic.h"
+#include "lib/kernel/stdio.h"
+#include "threads/flags.h"
+#include "threads/interrupt.h"
+#include "threads/loader.h"
+#include "threads/palloc.h"
+#include "threads/synch.h"
+#include "threads/thread.h"
+#include "userprog/gdt.h"
+#include "userprog/process.h"
+#include "vm/vm.h"
+#include <stdio.h>
+#include <syscall-nr.h>
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -170,11 +173,11 @@ bool remove(const char *file) {
  * 성공하면 파일 디스크립터를, 실패하면 -1을 반환합니다. */
 int open(const char *file) {
     check_address(file);
-    
+
     /* 파일 시스템 접근에 대한 동기화를 보장하기 위해 lock을 획득합니다.
      * 여러 스레드가 동시에 파일을 열려고 시도할 때 발생할 수 있는 경쟁 상태를 방지합니다. */
     lock_acquire(&filesys_lock);
-    
+
     struct file *f = filesys_open(file);
     if (f == NULL) {
         lock_release(&filesys_lock);
@@ -263,18 +266,47 @@ int filesize(int fd) {
  * 성공하면 실제로 읽은 바이트 수를, 실패하면 -1을 반환합니다. */
 int read(int fd, void *buffer, unsigned size) {
     check_address(buffer);
-    if (fd == 0) {
-        for (unsigned i = 0; i < size; i++) {
-            if (((char *)buffer)[i] == '\0')
-                break;
+
+    char *ptr = (char *)buffer;
+    int bytes_read = 0;
+
+    lock_acquire(&filesys_lock);
+
+    if (fd == STDIN_FILENO) {
+        for (int i = 0; i < size; i++) {
+            *ptr++ = input_getc();
+            bytes_read++;
         }
-        return size;
+        lock_release(&filesys_lock);
     }
 
-    struct file *f = process_get_file(fd);
-    if (f == NULL)
-        return -1;
-    return file_read(f, buffer, size);
+    else {
+        if (fd < 2) {
+
+            lock_release(&filesys_lock);
+            return -1;
+        }
+
+        struct file *file = process_get_file(fd);
+
+        if (file == NULL) {
+
+            lock_release(&filesys_lock);
+            return -1;
+        }
+
+        struct page *page = spt_find_page(&thread_current()->spt, buffer);
+
+        if (page && !page->writable) {
+            lock_release(&filesys_lock);
+            exit(-1);
+        }
+
+        bytes_read = file_read(file, buffer, size);
+
+        lock_release(&filesys_lock);
+    }
+    return bytes_read;
 }
 
 /* 파일에 데이터를 쓰는 시스템 콜입니다.
@@ -284,15 +316,26 @@ int read(int fd, void *buffer, unsigned size) {
  * 성공하면 실제로 쓴 바이트 수를, 실패하면 -1을 반환합니다. */
 int write(int fd, const void *buffer, unsigned size) {
     check_address(buffer);
-    if (fd == 1) {
+    int bytes_write = 0;
+
+    if (fd == STDOUT_FILENO) {
         putbuf(buffer, size);
-        return size;
+        bytes_write = size;
+    } else {
+        if (fd < 2)
+            return -1;
+
+        struct file *file = process_get_file(fd);
+
+        if (file == NULL)
+            return -1;
+
+        lock_acquire(&filesys_lock);
+        bytes_write = file_write(file, buffer, size);
+        lock_release(&filesys_lock);
     }
 
-    struct file *f = process_get_file(fd);
-    if (f == NULL)
-        return -1;
-    return file_write(f, buffer, size);
+    return bytes_write;
 }
 
 /* 파일 내 읽기/쓰기 위치를 이동하는 시스템 콜입니다.

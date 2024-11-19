@@ -798,3 +798,21 @@ struct file *process_get_file(int fd) {
 
     return fdt[fd];
 }
+
+/* 파일 디스크립터 테이블에서 파일을 제거하는 함수입니다.
+ * 
+ * 이 함수는 다음과 같은 조건을 검사합니다:
+ * 1. fd가 2보다 작은 경우 (표준 입출력은 닫을 수 없음)
+ * 2. fd가 FDT_COUNT_LIMIT보다 크거나 같은 경우 (배열 범위 초과)
+ * 
+ * 유효한 fd인 경우 해당 위치의 파일 포인터를 NULL로 설정합니다. */
+void process_close_file(int fd) {
+    struct thread *t = thread_current();
+    struct file **fdt = t->fdt;
+
+    // 표준 입출력이거나 최대 제한을 넘는 경우 처리하지 않음
+    if (fd < 2 || fd >= FDT_COUNT_LIMIT)
+        return;
+
+    fdt[fd] = NULL;
+}
