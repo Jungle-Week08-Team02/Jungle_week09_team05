@@ -379,6 +379,7 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
     /* Initialize thread. */
     init_thread(t, name, priority);
     tid = t->tid = allocate_tid();
+    t->exit_status = 0;
 
     /* Call the kernel_thread if it scheduled.
      * Note) rdi is 1st argument, and rsi is 2nd argument. */
@@ -394,6 +395,8 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
     /* Add to run queue. */
     thread_unblock(t);
     schedule_by_priority();
+
+    list_push_back(&thread_current()->child_list, &t->child_elem);
 
     return tid;
 }
@@ -631,6 +634,8 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->magic = THREAD_MAGIC;
 
     list_push_back(&all_list, &t->allelem);
+    list_init(&t->child_list);
+    sema_init(&t->load_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

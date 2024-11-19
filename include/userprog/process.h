@@ -13,4 +13,7 @@ void process_activate (struct thread *next);
 // 인자 스택 설정
 void argument_stack(char **argv, int argc, void **rsp);
 
+// 자식 프로세스 반환
+struct thread *get_child_process(int pid);
+
 #endif /* userprog/process.h */

@@ -96,7 +96,31 @@ static void initd(void *f_name) {
  * TID_ERROR if the thread cannot be created. */
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED) {
     /* Clone current thread to new thread.*/
-    return thread_create(name, PRI_DEFAULT, __do_fork, thread_current());
+    struct thread *current = thread_current();
+    memcpy(&current->parent_if, &if_, sizeof(struct intr_frame));
+
+    tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, current);
+    if (tid == TID_ERROR)
+        return TID_ERROR;
+
+    struct thread *child = get_child_process(tid);
+
+    sema_down(&child->load_sema);
+
+    return tid;
+}
+
+struct thread *get_child_process(int pid) {
+    struct thread *current = thread_current();
+    struct list *child_list = &current->child_list;
+
+    for (struct list_elem *e = list_begin(child_list); e != list_end(child_list);
+         e = list_next(e)) {
+        struct thread *child = list_entry(e, struct thread, elem);
+        if (child->tid == pid)
+            return child;
+    }
+    return NULL;
 }
 
 #ifndef VM
@@ -109,22 +133,29 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
     void *newpage;
     bool writable;
 
-    /* 1. TODO: If the parent_page is kernel page, then return immediately. */
+    /* 1. 부모 페이지가 커널 페이지인 경우 즉시 리턴 */
+    if (is_kernel_vaddr(va))
+        return true;
 
-    /* 2. Resolve VA from the parent's page map level 4. */
+    /* 2. 부모의 페이지 맵 레벨 4에서 VA 해석 */
     parent_page = pml4_get_page(parent->pml4, va);
+    if (parent_page == NULL)
+        return false;
 
-    /* 3. TODO: Allocate new PAL_USER page for the child and set result to
-     *    TODO: NEWPAGE. */
+    /* 3. 자식을 위한 새로운 PAL_USER 페이지 할당 */
+    newpage = palloc_get_page(PAL_USER);
+    if (newpage == NULL)
+        return false;
 
-    /* 4. TODO: Duplicate parent's page to the new page and
-     *    TODO: check whether parent's page is writable or not (set WRITABLE
-     *    TODO: according to the result). */
+    /* 4. 부모의 페이지를 새 페이지로 복제하고 쓰기 가능 여부 확인 */
+    memcpy(newpage, parent_page, PGSIZE);
+    writable = is_writable(pte);
 
-    /* 5. Add new page to child's page table at address VA with WRITABLE
-     *    permission. */
+    /* 5. WRITABLE 권한으로 VA 주소에 새 페이지를 자식의 페이지 테이블에 추가 */
     if (!pml4_set_page(current->pml4, va, newpage, writable)) {
-        /* 6. TODO: if fail to insert page, do error handling. */
+        /* 6. 페이지 삽입 실패 시 에러 처리 */
+        palloc_free_page(newpage);
+        return false;
     }
     return true;
 }
@@ -139,11 +170,12 @@ static void __do_fork(void *aux) {
     struct thread *parent = (struct thread *)aux;
     struct thread *current = thread_current();
     /* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-    struct intr_frame *parent_if;
+    struct intr_frame *parent_if = &parent->parent_if;
     bool succ = true;
 
     /* 1. Read the cpu context to local stack. */
     memcpy(&if_, parent_if, sizeof(struct intr_frame));
+    if_.R.rax = 0; // 자식 프로세스 리턴값은 0
 
     /* 2. Duplicate PT */
     current->pml4 = pml4_create();
@@ -165,13 +197,25 @@ static void __do_fork(void *aux) {
      * TODO:       in include/filesys/file.h. Note that parent should not return
      * TODO:       from the fork() until this function successfully duplicates
      * TODO:       the resources of parent.*/
+    for (int i = 0; i < FDT_COUNT_LIMIT; i++) {
+        struct file *file = parent->fdt[i];
+        
+        if (file == NULL)
+            continue;
+        if (file > 2)
+            file = file_duplicate(file);
+        current->fdt[i] = file;
+    }
+    current->next_fd = parent->next_fd;
 
+    sema_up(&current->load_sema);
     process_init();
 
     /* Finally, switch to the newly created process. */
     if (succ)
         do_iret(&if_);
 error:
+    sema_up(&current->load_sema);
     thread_exit();
 }
 
@@ -232,9 +276,9 @@ int process_exec(void *f_name) {
  * 기다리지 않고 즉시 -1을 반환합니다.
  *
  * 이 함수는 문제 2-2에서 구현될 예정입니다. 현재는 아무 동작도 하지 않습니다. */
-int process_wait (tid_t child_tid UNUSED) {
-	thread_sleep(200);
-	return -1;
+int process_wait(tid_t child_tid UNUSED) {
+    thread_sleep(200);
+    return -1;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -368,14 +412,12 @@ static bool load(const char *file_name, struct intr_frame *if_) {
     }
 
     /* Read and verify executable header. */
-	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
-			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
-			|| ehdr.e_type != 2
-			|| ehdr.e_machine != 0x3E // amd64
-			|| ehdr.e_version != 1
-			|| ehdr.e_phentsize != sizeof (struct Phdr)
-			|| ehdr.e_phnum > 1024) {
-		printf ("load: %s: error loading executable\n", file_name);
+    if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
+        memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 ||
+        ehdr.e_machine != 0x3E // amd64
+        || ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) ||
+        ehdr.e_phnum > 1024) {
+        printf("load: %s: error loading executable\n", file_name);
         goto done;
     }
 
@@ -655,7 +697,7 @@ static bool setup_stack(struct intr_frame *if_) {
 #endif /* VM */
 
 /* 사용자 프로그램의 명령행 인자를 스택에 설정하는 함수입니다.
- * 
+ *
  * 이 함수는 다음과 같은 순서로 스택을 구성합니다:
  * 1. 인자 문자열들을 스택의 맨 위에서부터 역순으로 저장합니다.
  * 2. 8바이트 정렬을 위해 필요한 패딩을 추가합니다.
