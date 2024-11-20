@@ -1,0 +1,3 @@
+pintos --gdb -v -k -m 20   --fs-disk=10 -p tests/userprog/fork-once:fork-once -- -q   -f run fork-once
+
+pintos --gdb -v -k -m 20   --fs-disk=10 -p tests/userprog/exec-missing:exec-missing -- -q   -f run exec-missing

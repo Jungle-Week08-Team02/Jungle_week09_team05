@@ -120,7 +120,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
-	  newpage = palloc_get_page(PAL_ZERO);
+	  newpage = palloc_get_page(PAL_USER|PAL_ZERO);
     if (newpage == NULL)
       return false;
 
@@ -155,6 +155,7 @@ __do_fork (void *aux) {
 
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	if_.R.rax = 0; //자식 프로세스의 return 값 (0)
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -194,6 +195,8 @@ __do_fork (void *aux) {
 		else
 			current->fdt[fd] = file;
 	}
+
+	sema_up(&current->fork_sema); //fork 프로세스가 정상적으로 완료되었으므로 현재 fork횽 sema unblock
 
 	process_init();
 
@@ -237,7 +240,10 @@ process_exec (void *f_name) { // 커맨드 라인을 f_name으로 전달
 		argv[argc++] = arg;
 
 	/* And then load the binary */
+	printf("exec %s\n\n", file_name);
 	success = load (file_name, &_if);
+	if(success == false)
+		exit(-1);
 
 	/* 인자 passing하는 부분 여기 */
 	argument_stack(argv, argc, &_if);
@@ -424,9 +430,9 @@ process_exit (void) {
 	/* fdt 비우기 */
 	for (int fd = 0; fd < curr->fd_idx; fd++)
 		close(fd);
+	file_close(curr->runn_file);
 	palloc_free_multiple(curr->fdt, FDT_PAGES);
 
-	file_close(curr->runn_file);
 	process_cleanup();
 	sema_up(&curr->wait_sema);
 	sema_down(&curr->exit_sema);
@@ -535,6 +541,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
+	printf("load %s\n\n", file_name);
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;

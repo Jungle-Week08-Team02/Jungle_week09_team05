@@ -75,7 +75,7 @@ void
 syscall_handler (struct intr_frame *f UNUSED) {
 
 	int syscall_num = f->R.rax;
-	printf("%d %d\n",syscall_num, SYS_HALT);
+	// printf("%d %d\n",syscall_num, SYS_HALT);
 
 	switch (syscall_num)
 	{
@@ -96,7 +96,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		
 		case SYS_WAIT:
-			f->R.rax = process_wait(f->R.rdi);
+			f->R.rax = wait(f->R.rdi);
 			break;
 		
 		case SYS_CREATE:
@@ -142,9 +142,8 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		default:
 			exit(-1);
 	}
-
-	printf ("system call!\n");
-	thread_exit ();
+	// printf ("system call!\n");
+	
 }
 
 /* Project 2 : System Call 구현 */
@@ -165,7 +164,7 @@ void exit (int status) {
 	struct thread *curr = thread_current();
 	curr->exit_status = status;
 
-	printf("%s: exit(%d).\n", curr->name, curr->exit_status);
+	printf("%s: exit(%d)\n", curr->name, curr->exit_status);
 
 	thread_exit();
 }
@@ -186,7 +185,9 @@ int exec (const char *cmd_line){
 
 	memcpy(cmd_copy, cmd_line, size);
 
-	return process_exec(cmd_copy); 
+	int ret = process_exec(cmd_copy); 
+	printf("♨️\n");
+	return ret;
 }
 
 int wait (pid_t tid){
@@ -317,27 +318,38 @@ int tell(int fd){
 	return file_tell(file);
 }
 
-void close(int fd){
-	struct thread *curr = thread_current();
+// void close(int fd){
+// 	struct thread *curr = thread_current();
+// 	struct file *file = process_get_file(fd);
+// 	if (file == NULL)
+// 		goto done;
+
+// 	process_close_file(fd);
+
+// 	if (file >= STDIN && file <= STDERR){
+// 		file = 0;
+// 		goto done;
+// 	}
+
+// 	if (file->dup_count == 0)
+// 		file_close(file);
+	
+// 	else
+// 		file->dup_count--;
+
+// done:
+// 	return;
+// }
+
+void close(int fd)
+{
 	struct file *file = process_get_file(fd);
-	if (file == NULL)
-		goto done;
+
+	if (fd < 3 || file == NULL)
+		return;
 
 	process_close_file(fd);
-
-	if (file >= STDIN && file <= STDERR){
-		file = 0;
-		goto done;
-	}
-
-	if (file->dup_count == 0)
-		file_close(file);
-	
-	else
-		file->dup_count--;
-
-done:
-	return;
+	file_close(file);
 }
 
 int dup2(int oldfd, int newfd){
