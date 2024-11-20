@@ -403,16 +403,18 @@ thread_create (const char *name, int priority,
 
 /* Project 2 : System Call 구현 */
 #ifdef USERPROG
-	t->exit_status = 0;
 
 	/* file descriptor table 초기화 */
 	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
 	if (t->fdt == NULL)
 		return TID_ERROR;
+	
+	t->exit_status = 0;
+
+	t->fd_idx = 3;
 	t->fdt[0] = STDIN;
 	t->fdt[1] = STDOUT;
 	t->fdt[2] = STDERR;
-	t->fd_idx = 3;
 
 	/* 현재 실행 중인 스레드의 자식 스레드 리스트에 현재 스레드를 추가 */
 	list_push_back(&thread_current()->child_list, &t->child_elem);
@@ -514,10 +516,12 @@ thread_exit (void) {
 	process_exit ();
 #endif
 
+	if (thread_mlfqs)
+		list_remove(&thread_current()->allelem);
+
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
-	list_remove(&thread_current()->allelem);
 	do_schedule (THREAD_DYING);
 	NOT_REACHED ();
 }

@@ -14,7 +14,15 @@ int process_exec (void *f_name);
 int process_wait (tid_t);
 void process_exit (void);
 void process_activate (struct thread *next);
-void argument_stack(char **parse, int count, void **rsp);
+/** Project 2: Command Line Parsing **/
+// void argument_stack(char **parse, int count, void **rsp);
+void argument_stack(char **argv, int argc, struct intr_frame *if_);
+
+/** #Project 2: System Call */
 struct thread *get_child_process(int pid);
+int process_add_file(struct file *f);
+struct file *process_get_file(int fd);
+int process_close_file(int fd);
+int process_insert_file(int fd, struct file *f);
 
 #endif /* userprog/process.h */

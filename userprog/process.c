@@ -51,8 +51,8 @@ process_create_initd (const char *file_name) {
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 	/* file_name을 parsing해서 맨 앞 토큰을 thread_create()에 인자 전달 */
-	char *save_ptr;
-	strtok_r(file_name," ",&save_ptr);
+	char *ptr;
+	strtok_r(file_name," ",&ptr);
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
@@ -112,21 +112,29 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if (is_kernel_vaddr(va))
+    return true;
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page (parent->pml4, va);
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	  newpage = palloc_get_page(PAL_ZERO);
+    if (newpage == NULL)
+      return false;
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+		memcpy(newpage, parent_page, PGSIZE);
+    writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
+		return false;
 	}
 	return true;
 }
@@ -216,21 +224,27 @@ process_exec (void *f_name) { // 커맨드 라인을 f_name으로 전달
 	process_cleanup ();
 
 	/* Command Line 인자 parsing */
-	char *parse[64];
-	char *token, *save_ptr;
-	int count = 0;
-	for (token = strtok_r(file_name," ",&save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
-		parse[count++] = token;
+	// char *parse[64];
+	// char *token, *save_ptr;
+	// int count = 0;
+	// for (token = strtok_r(file_name," ",&save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+	// 	parse[count++] = token;
+	char *ptr, *arg;
+	int argc = 0;
+	char *argv[64];
+
+	for (arg = strtok_r(file_name, " ", &ptr); arg != NULL; arg=strtok_r(NULL, " ", &ptr))
+		argv[argc++] = arg;
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
 	/* 인자 passing하는 부분 여기 */
-	argument_stack(parse, count, &_if.rsp);
-	_if.R.rdi = count;
-	_if.R.rsi = (char *)_if.rsp + 8;
+	argument_stack(argv, argc, &_if);
+	// _if.R.rdi = count;
+	// _if.R.rsi = (char *)_if.rsp + 8;
 	/* user stack을 16진수로 프린트 */
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true);
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
@@ -242,38 +256,120 @@ process_exec (void *f_name) { // 커맨드 라인을 f_name으로 전달
 	NOT_REACHED ();
 }
 
-/* Project 2: Command Line Parsing - 유저 스택에 인자 토큰 저장 */
-void
-argument_stack(char **parse, int count, void **rsp){
-	for (int i = count - 1; i > -1; i--)
-	{
-		for (int j = strlen(parse[i]); j>-1; j--)
-		{
-			(*rsp)--;
-			**(char **)rsp = parse[i][j];
-		}
-		parse[i] = *(char **)rsp;
-	}
+///* 현재 process에 file을 추가하거나 가져오는 함수들 *///
+// 1. 현재 스레드의 fdt에 파일 추가 (현재 fd 다음에 추가)
+int process_add_file(struct file *f){
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->fdt;
 
-	int padding = (int)*rsp % 8;
-	for (int i = 0; i < padding; i++)
-	{
-		(*rsp)--;
-		**(uint8_t **)rsp = 0;
-	}
+	if (curr->fd_idx >= FDCOUNT_LIMIT)
+		return -1;
+	
+	while (fdt[curr->fd_idx] != NULL)
+		curr->fd_idx++;
+	
+	fdt[curr->fd_idx++] = f;
 
-	(*rsp) -= 8;
-	**(char ***)rsp = 0;
-
-	for (int i = count-1; i>-1; i--)
-	{
-		(*rsp) -= 8;
-		**(char ***)rsp = parse[i];
-	}
-
-	(*rsp) -= 8;
-	**(void ***)rsp = 0;
+	return curr->fd_idx - 1;
 }
+
+// 2. 현재 스레드의 fdt의 fd인덱스에 해당하는 파일 get
+struct file* process_get_file(int fd){
+	struct thread *curr = thread_current();
+
+	if (fd < 0 || fd >= FDCOUNT_LIMIT)
+		return NULL;
+	
+	return curr->fdt[fd];
+}
+
+// 3. 현재 스레드의 fdt의 fd인덱스에 해당하는 파일 삭제
+int process_close_file(int fd){
+	struct thread *curr = thread_current();
+
+	if (fd < 0 || fd > FDCOUNT_LIMIT)
+		return -1;
+	
+	curr->fdt[fd] = NULL;
+	return 0;
+}
+
+// 4. 현재 스레드의 fdt의 fd인덱스에 파일 insert
+int process_insert_file(int fd, struct file *f){
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->fdt;
+
+	if (fd < 0 || fd >= FDCOUNT_LIMIT)
+		return -1;
+	
+	if (f>STDERR)
+		f->dup_count++;
+
+	fdt[fd] = f;
+
+	return fd;
+}
+
+/* Project 2: Command Line Parsing - 유저 스택에 인자 토큰 저장 */
+void argument_stack(char **argv, int argc, struct intr_frame *if_) {
+	char *arg_addr[100];
+	int argv_len;
+
+	for (int i = argc - 1; i >= 0; i--) {
+			argv_len = strlen(argv[i]) + 1;
+			if_->rsp -= argv_len;
+			memcpy(if_->rsp, argv[i], argv_len);
+			arg_addr[i] = if_->rsp;
+	}
+
+	while (if_->rsp % 8)
+			*(uint8_t *)(--if_->rsp) = 0;
+
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, sizeof(char *));
+
+	for (int i = argc - 1; i >= 0; i--) {
+			if_->rsp -= 8;
+			memcpy(if_->rsp, &arg_addr[i], sizeof(char *));
+	}
+
+	if_->rsp = if_->rsp - 8;
+	memset(if_->rsp, 0, sizeof(void *));
+
+	if_->R.rdi = argc;
+	if_->R.rsi = if_->rsp + 8;
+}
+// void
+// argument_stack(char **parse, int count, void **rsp){
+// 	for (int i = count - 1; i > -1; i--)
+// 	{
+// 		for (int j = strlen(parse[i]); j>-1; j--)
+// 		{
+// 			(*rsp)--;
+// 			**(char **)rsp = parse[i][j];
+// 		}
+// 		parse[i] = *(char **)rsp;
+// 	}
+
+// 	int padding = (int)*rsp % 8;
+// 	for (int i = 0; i < padding; i++)
+// 	{
+// 		(*rsp)--;
+// 		**(uint8_t **)rsp = 0;
+// 	}
+
+// 	(*rsp) -= 8;
+// 	**(char ***)rsp = 0;
+
+// 	for (int i = count-1; i>-1; i--)
+// 	{
+// 		(*rsp) -= 8;
+// 		**(char ***)rsp = parse[i];
+// 	}
+
+// 	(*rsp) -= 8;
+// 	**(void ***)rsp = 0;
+// }
 
 /* Project 2. 자식 process를 가져오는 함수 */
 struct thread *get_child_process(int pid) {
@@ -459,6 +555,10 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
+	/* Project 2. System Call 구현: 파일 실행 적재 */
+	t->runn_file = file;
+	file_deny_write(file);
+
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -533,12 +633,13 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	 /* 해당 과제에 대해 process_exec() 함수에 구현하였음. */
 
 	success = true;
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	// file_close (file);
 	return success;
 }
 
