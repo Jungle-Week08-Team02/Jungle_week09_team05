@@ -240,7 +240,7 @@ process_exec (void *f_name) { // 커맨드 라인을 f_name으로 전달
 		argv[argc++] = arg;
 
 	/* And then load the binary */
-	printf("exec %s\n\n", file_name);
+	// printf("exec %s\n\n", file_name);
 	success = load (file_name, &_if);
 	if(success == false)
 		exit(-1);
@@ -541,7 +541,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
-	printf("load %s\n\n", file_name);
+	// printf("load %s\n\n", file_name);
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;

@@ -39,7 +39,7 @@ void close(int fd);
 
 
 /* Project 2. System Call 구현: filesys 위한 전역 lock */
-struct lock filesys_lock;
+// struct lock filesys_lock;
 
 /* System call.
  *
@@ -156,7 +156,7 @@ void check_address(void *addr){
 
 /* Project 2 : System Call 구현 */
 void halt(void) {
-	printf("Is here, huh...?\n");
+	// printf("Is here, huh...?\n");
 	power_off();
 }
 
@@ -185,8 +185,7 @@ int exec (const char *cmd_line){
 
 	memcpy(cmd_copy, cmd_line, size);
 
-	int ret = process_exec(cmd_copy); 
-	printf("♨️\n");
+	int ret = process_exec(cmd_copy);
 	return ret;
 }
 
@@ -197,9 +196,7 @@ int wait (pid_t tid){
 bool create(const char *file, unsigned initial_size){
 	check_address(file);
 
-	lock_acquire(&filesys_lock);
 	bool success = filesys_create(file, initial_size);
-	lock_release(&filesys_lock);
 
 	return success;
 }
@@ -207,9 +204,7 @@ bool create(const char *file, unsigned initial_size){
 bool remove(const char *file){
 	check_address(file);
 
-	lock_acquire(&filesys_lock);
 	bool success = filesys_remove(file);
-	lock_release(&filesys_lock);
 
 	return success;
 }
@@ -217,7 +212,7 @@ bool remove(const char *file){
 int open(const char *file){
 	check_address(file);
 
-	lock_acquire(&filesys_lock);
+	// lock_acquire(&filesys_lock);
 	struct file *newfile = filesys_open(file);
 
 	if (newfile == NULL)
@@ -228,13 +223,14 @@ int open(const char *file){
 	if (fd == -1)
 		file_close(newfile);
 	
-	lock_release(&filesys_lock);
+	// lock_release(&filesys_lock);
 	return fd;
 
 err:
-	lock_release(&filesys_lock);
+	// lock_release(&filesys_lock);
 	return -1;
 }
+
 
 int filesize(int fd) {
 	struct file *file = process_get_file(fd);
@@ -259,7 +255,7 @@ int read(int fd, void *buffer, unsigned length){
 		char c;
 		unsigned char *buf = buffer;
 
-		for (; i < length; i++){
+		for (i; i < length; i++){
 			c = input_getc();
 			*buf++ = c;
 			if (c == '\0')
@@ -275,30 +271,66 @@ int read(int fd, void *buffer, unsigned length){
 	return bytes;
 }
 
-int write(int fd, const void *buffer, unsigned length){
-	check_address(buffer);
+// int write(int fd, const void *buffer, unsigned length){
+// 	check_address(buffer);
 
-	lock_acquire(&filesys_lock);
-	struct thread *curr = thread_current();
-	off_t bytes = -1;
+// 	struct thread *curr = thread_current();
+// 	off_t bytes = -1;
 
-	struct file *file = process_get_file(fd);
+// 	struct file *file = process_get_file(fd);
 
-	if (file == STDIN || file == NULL)
-		goto done;
+// 	if (file == STDIN || file == NULL)
+// 		goto done;
 	
-	if (file == STDOUT || file == STDERR){
-		putbuf(buffer, length);
-		bytes = length;
-		goto done;
-	}
+// 	if (file == STDOUT || file == STDERR){
+// 		putbuf(buffer, length);
+// 		bytes = length;
+// 		goto done;
+// 	}
 
-	bytes = file_write(file, buffer, length);
+// 	lock_acquire(&filesys_lock);
+// 	bytes = file_write(file, buffer, length);
 
-done:
-	lock_release(&filesys_lock);
-	return bytes;
+// done:
+// 	lock_release(&filesys_lock);
+// 	return bytes;
+// }
+
+int write(int fd, const void *buffer, unsigned length)
+{
+    check_address(buffer);
+
+    off_t bytes = -1;
+
+    // fd가 0인 경우(STDIN) 종료
+    if (fd <= 0)
+        return -1;
+
+    // fd가 1(STDOUT), 2(STDERR)인 경우 콘솔에 내용 출력
+    if (fd < 3)
+    {
+				lock_acquire(&filesys_lock);
+        putbuf(buffer, length);
+				lock_release(&filesys_lock);
+        return length;
+    }
+
+    // fd가 3 이상인 경우
+    struct file *file = process_get_file(fd);
+
+    if (file == NULL)
+        return -1;
+
+    // 동시 접근을 제한하기 위해 Lock 설정
+    lock_acquire(&filesys_lock);
+    // 파일에 내용 작성
+    bytes = file_write(file, buffer, length);
+    // 쓰기가 완료되면 Lock 해제
+    lock_release(&filesys_lock);
+
+    return bytes;
 }
+
 
 void seek (int fd, unsigned position){
 	struct file *file = process_get_file(fd);
