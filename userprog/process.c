@@ -47,7 +47,7 @@ tid_t process_create_initd(const char *file_name) {
     if (fn_copy == NULL) // 할당 실패
         return TID_ERROR;
 
-    strlcpy(fn_copy, file_name, PGSIZE); // 파일 이름 복사
+    strlcpy(fn_copy, file_name, strlen(file_name) + 1); // 파일 이름 복사
 
     /* fn_copy를 이용해 실행 파일명만 추출 */
     char *save_ptr; // 토크나이저의 위치를 추적하는 데 사용되는 변수
@@ -55,10 +55,8 @@ tid_t process_create_initd(const char *file_name) {
              &save_ptr); // 공백을 기준으로 입력한 문자열을 분리하여 토크나이징을 진행
 
     /* file_name으로 스레드를 생성하고 fn_copy를 인자로 전달 */
+    char* temp = file_name;
     tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy); // 스레드 생성
-
-    /* 첫 번째 복사본은 이제 필요 없음 */
-    palloc_free_page(fn_copy); // 할당 해제
 
     if (tid == TID_ERROR) // 스레드 생성 실패
         return TID_ERROR; // 스레드 ID 반환
@@ -71,11 +69,7 @@ static void initd(void *f_name) {
 #ifdef VM
     supplemental_page_table_init(&thread_current()->spt);
 #endif
-
     process_init();
-    // for (; *(char *)f_name != '\0'; f_name++)
-    //     putchar(*(char *)f_name);
-    // putchar('\n');
 
     if (process_exec(f_name) < 0)
         PANIC("Fail to launch initd\n");
@@ -87,7 +81,7 @@ static void initd(void *f_name) {
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED) {
     /* Clone current thread to new thread.*/
     struct thread *current = thread_current();
-    memcpy(&current->parent_if, &if_, sizeof(struct intr_frame));
+    memcpy(&current->parent_if, if_, sizeof(struct intr_frame));
 
     tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, current);
     if (tid == TID_ERROR)
@@ -106,7 +100,7 @@ struct thread *get_child_process(int pid) {
 
     for (struct list_elem *e = list_begin(child_list); e != list_end(child_list);
          e = list_next(e)) {
-        struct thread *child = list_entry(e, struct thread, elem);
+        struct thread *child = list_entry(e, struct thread, child_elem);
         if (child->tid == pid)
             return child;
     }
@@ -212,7 +206,6 @@ error:
 /* 현재 실행 컨텍스트를 f_name으로 전환합니다.
  * 실패 시 -1을 반환합니다. */
 int process_exec(void *f_name) {
-    printf("process_exec %s\n", f_name);
     char *file_name = f_name; // 파일 이름
     bool success;             // 성공 여부
 
@@ -246,7 +239,6 @@ int process_exec(void *f_name) {
     }
 
     /* 실행 파일 로드 */
-    // printf("file_name: %s\n", file_name);
     success = load(file_name, &_if); // 첫 번째 인자를 실행 파일 이름으로 사용
 
     /* 로드 실패 시 종료 */
@@ -257,9 +249,11 @@ int process_exec(void *f_name) {
 
     /* 인자 스택 설정 */
     argument_stack(argv, argc, &_if.rsp); // rsp만 전달
-    palloc_free_page(file_name);
+    _if.R.rdi = argc;
+    _if.R.rsi = _if.rsp + sizeof(void *);
+    // palloc_free_page(file_name);
 
-    hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+    // hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
     /* 전환된 프로세스를 시작합니다. */
     do_iret(&_if); // 인트러프 프레임 전환
@@ -284,6 +278,8 @@ int process_wait(tid_t child_tid UNUSED) {
     sema_up(&child->exit_sema);
 
     return child->exit_status;
+    // for (int i = 0; i < 10000000; i++);
+    // return 0;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -298,7 +294,7 @@ void process_exit(void) {
     }
 
     // running_file이 NULL이 아닌 경우에만 처리
-    if (curr->running_file != NULL)
+    if (curr->running_file != NULL) 
         file_close(curr->running_file);
 
     process_cleanup();
@@ -505,7 +501,7 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 
 done:
     /* We arrive here whether the load is successful or not. */
-    file_close(file);
+    // file_close(file);
     return success;
 }
 
@@ -781,7 +777,7 @@ int process_add_file(struct file *f) {
 
     // 파일을 테이블에 추가하고 파일 디스크립터 반환
     fdt[t->next_fd] = f;
-    return t->next_fd++;
+    return t->next_fd;
 }
 
 /* 파일 디스크립터를 통해 파일을 반환하는 함수입니다. */

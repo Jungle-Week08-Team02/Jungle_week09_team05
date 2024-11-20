@@ -30,7 +30,7 @@ int write(int, const void *, unsigned);
 void seek(int, unsigned);
 unsigned tell(int);
 void close(int);
-tid_t fork(const char *);
+tid_t fork(const char *, struct intr_frame *);
 int exec(const char *);
 int wait(tid_t);
 
@@ -77,7 +77,7 @@ void syscall_handler(struct intr_frame *f UNUSED) {
         break;
 
     case SYS_FORK:
-        f->R.rax = fork(f->R.rdi);
+        f->R.rax = fork(f->R.rdi, f);
         break;
 
     case SYS_EXEC:
@@ -216,9 +216,9 @@ void exit(int status) {
  * 이 함수는 현재 프로세스의 복사본을 생성합니다.
  * 자식 프로세스는 부모 프로세스의 메모리와 파일 디스크립터를 복사하여 가지게 됩니다.
  * 성공하면 자식 프로세스의 pid를, 실패하면 -1을 반환합니다. */
-tid_t fork(const char *thread_name) {
+tid_t fork(const char *thread_name, struct intr_frame *if_) {
     check_address(thread_name);
-    return process_fork(thread_name, NULL);
+    return process_fork(thread_name, if_);
 }
 
 /* 새로운 프로그램을 실행하는 시스템 콜입니다.
@@ -232,12 +232,13 @@ int exec(const char *file) {
     char *fn_copy = palloc_get_page(0);
 
     if (fn_copy == NULL)
-        return -1;
+        exit(-1);
 
-    strlcpy(fn_copy, file, PGSIZE);
+    // strlcpy(fn_copy, file, PGSIZE);
+    strlcpy(fn_copy, file, sizeof(file) + 1);
 
     if (process_exec(fn_copy) == -1)
-        return -1;
+        exit(-1);
 
     NOT_REACHED();
 

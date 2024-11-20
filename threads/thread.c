@@ -398,11 +398,11 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
         return TID_ERROR;
     }
 
+    list_push_back(&thread_current()->child_list, &t->child_elem);
+
     /* Add to run queue. */
     thread_unblock(t);
     schedule_by_priority();
-
-    list_push_back(&thread_current()->child_list, &t->child_elem);
 
     return tid;
 }
