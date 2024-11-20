@@ -65,6 +65,7 @@ void syscall_handler(struct intr_frame *f UNUSED) {
      * rax 레지스터에 저장된 시스템 콜 번호에 따라 적절한 시스템 콜을 처리합니다.
      * 각 시스템 콜은 인자의 개수가 다르며, 해당 인자들은 rdi, rsi, rdx 등의 레지스터를
      * 통해 전달됩니다. */
+    // printf("syscall %d\n\n", f->R.rax);
 
     switch (f->R.rax) {
     case SYS_HALT:
@@ -122,6 +123,9 @@ void syscall_handler(struct intr_frame *f UNUSED) {
     case SYS_CLOSE:
         close(f->R.rdi);
         break;
+    
+    default:
+        exit(-1);
     }
 }
 

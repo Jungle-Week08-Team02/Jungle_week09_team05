@@ -51,31 +51,17 @@ tid_t process_create_initd(const char *file_name) {
 
     /* fn_copy를 이용해 실행 파일명만 추출 */
     char *save_ptr; // 토크나이저의 위치를 추적하는 데 사용되는 변수
-    char *prog_name = strtok_r(
-        fn_copy, " ", // 공백을 기준으로 입력한 문자열을 분리하여 토크나이징을 진행
-        &save_ptr); // 토크나이저의 위치를 추적하는 데 사용되는 변수
+    strtok_r(file_name, " ",
+             &save_ptr); // 공백을 기준으로 입력한 문자열을 분리하여 토크나이징을 진행
 
-    if (prog_name == NULL) {       // 토크나이징 실패
-        palloc_free_page(fn_copy); // 할당 해제
-        return TID_ERROR;          // 스레드 ID 반환
-    }
-
-    /* 두 번째 fn_copy는 전체 커맨드라인을 보존하기 위한 것 */
-    char *fn_copy2 = palloc_get_page(0); // 페이지 할당
-    if (fn_copy2 == NULL) {              // 할당 실패
-        palloc_free_page(fn_copy);       // 할당 해제
-        return TID_ERROR;                // 스레드 ID 반환
-    }
-    strlcpy(fn_copy2, fn_copy, PGSIZE); // 파일 이름 복사
-
-    /* prog_name으로 스레드를 생성하고 fn_copy2를 인자로 전달 */
-    tid = thread_create(prog_name, PRI_DEFAULT, initd, fn_copy2); // 스레드 생성
+    /* file_name으로 스레드를 생성하고 fn_copy를 인자로 전달 */
+    tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy); // 스레드 생성
 
     /* 첫 번째 복사본은 이제 필요 없음 */
     palloc_free_page(fn_copy); // 할당 해제
 
-    if (tid == TID_ERROR)           // 스레드 생성 실패
-        palloc_free_page(fn_copy2); // 할당 해제
+    if (tid == TID_ERROR) // 스레드 생성 실패
+        return TID_ERROR; // 스레드 ID 반환
 
     return tid; // 스레드 ID 반환
 }
@@ -87,6 +73,9 @@ static void initd(void *f_name) {
 #endif
 
     process_init();
+    // for (; *(char *)f_name != '\0'; f_name++)
+    //     putchar(*(char *)f_name);
+    // putchar('\n');
 
     if (process_exec(f_name) < 0)
         PANIC("Fail to launch initd\n");
@@ -223,6 +212,7 @@ error:
 /* 현재 실행 컨텍스트를 f_name으로 전환합니다.
  * 실패 시 -1을 반환합니다. */
 int process_exec(void *f_name) {
+    printf("process_exec %s\n", f_name);
     char *file_name = f_name; // 파일 이름
     bool success;             // 성공 여부
 
@@ -237,20 +227,27 @@ int process_exec(void *f_name) {
     process_cleanup(); // 프로세스 정리
 
     /* 명령행 인자 파싱을 위한 변수들 */
-    char *ptr;
     char *argv[64]; // 포인터 배열로 수정
+    // char *ptr;
     int argc = 0;
 
     /* 토큰화 */
-    char *token = strtok_r(file_name, " ", &ptr);
+    char *token;
+    char *save_ptr;
 
-    while (token != NULL && argc < 64) { // 토큰이 유효하고 인자 수가 64 미만인 경우
-        argv[argc++] = token;            // 인자 배열에 토큰 추가
-        token = strtok_r(NULL, " ", &ptr); // 다음 토큰 파싱
+    // while (token != NULL && argc < 64) { // 토큰이 유효하고 인자 수가 64 미만인 경우
+    //     argv[argc++] = token;            // 인자 배열에 토큰 추가
+    //     token = strtok_r(NULL, " ", &ptr); // 다음 토큰 파싱
+    // }
+
+    for (token = strtok_r(file_name, " ", &save_ptr); token != NULL;
+         token = strtok_r(NULL, " ", &save_ptr)) {
+        argv[argc++] = token;
     }
 
     /* 실행 파일 로드 */
-    success = load(argv[0], &_if); // 첫 번째 인자를 실행 파일 이름으로 사용
+    // printf("file_name: %s\n", file_name);
+    success = load(file_name, &_if); // 첫 번째 인자를 실행 파일 이름으로 사용
 
     /* 로드 실패 시 종료 */
     if (!success) {
@@ -260,10 +257,9 @@ int process_exec(void *f_name) {
 
     /* 인자 스택 설정 */
     argument_stack(argv, argc, &_if.rsp); // rsp만 전달
-    printf("rsp: %lx\n", _if.rsp);
     palloc_free_page(file_name);
 
-    // hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+    hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
     /* 전환된 프로세스를 시작합니다. */
     do_iret(&_if); // 인트러프 프레임 전환
@@ -800,11 +796,11 @@ struct file *process_get_file(int fd) {
 }
 
 /* 파일 디스크립터 테이블에서 파일을 제거하는 함수입니다.
- * 
+ *
  * 이 함수는 다음과 같은 조건을 검사합니다:
  * 1. fd가 2보다 작은 경우 (표준 입출력은 닫을 수 없음)
  * 2. fd가 FDT_COUNT_LIMIT보다 크거나 같은 경우 (배열 범위 초과)
- * 
+ *
  * 유효한 fd인 경우 해당 위치의 파일 포인터를 NULL로 설정합니다. */
 void process_close_file(int fd) {
     struct thread *t = thread_current();

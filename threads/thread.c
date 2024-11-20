@@ -639,6 +639,7 @@ static void init_thread(struct thread *t, const char *name, int priority) {
 
     t->magic = THREAD_MAGIC;
 
+    t->exit_status = 0;
     t->next_fd = 2;
 
     list_push_back(&all_list, &t->allelem);
