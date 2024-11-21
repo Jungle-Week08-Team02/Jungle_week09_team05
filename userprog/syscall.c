@@ -37,10 +37,6 @@ void seek(int fd, unsigned position);
 int tell(int fd);
 void close(int fd);
 
-
-/* Project 2. System Call 구현: filesys 위한 전역 lock */
-// struct lock filesys_lock;
-
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
