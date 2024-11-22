@@ -31,7 +31,7 @@ int tell(int fd);
 void close(int fd);
 
 /** #Project 2: System Call */
-extern struct lock filesys_lock;  // 파일 읽기/쓰기 용 lock
+struct lock filesys_lock;  // 파일 읽기/쓰기 용 lock
 
 /** #Project 2: Extend File Descriptor (Extra) */
 int dup2(int oldfd, int newfd);

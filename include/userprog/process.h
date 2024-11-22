@@ -2,9 +2,9 @@
 #define USERPROG_PROCESS_H
 
 /* Project 2. System Call fdt에 사용할 기본 입출력 상수 */
-#define STDIN 0x1
-#define STDOUT 0x2
-#define STDERR 0x3
+#define STDIN 0x0
+#define STDOUT 0x1
+#define STDERR 0x2
 
 #include "threads/thread.h"
 
